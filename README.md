@@ -8,11 +8,17 @@ Install & Run
     # -- Optional but makes the application scale better
     pecl install libevent-beta
     # -- Add in the .so file
-    vim /etc/php5/php.ini 
+    vim /etc/php5/php.ini
+    
+    # -- Install phpredis
+    git clone https://github.com/nrk/phpiredis.git
+    # -- Follow the rest at https://github.com/nrk/phpiredis
     
     git clone https://github.com/joseph-montanez/shado.git
     cd shado
+    
     curl -s https://getcomposer.org/installer | php
+    
     php composer.phar install
     
     # -- Run the application
@@ -28,3 +34,6 @@ Technology
  * Ratchet - Web Socket Support
  * Redis - Key / Value Storage Engine
  * PHP libevent - Faster processing
+ * Predis\Async - Asyc Redis for Php
+ * PHP phpredis - Needed for Predis\Async
+ * Twig - Templating
