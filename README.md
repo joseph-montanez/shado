@@ -5,14 +5,17 @@ A real-time, shared to do application in php. Currently this application only su
 
 Install & Run
 =====
+    # -- Optional but makes the application scale better
+    pecl install libevent-beta
+    # -- Add in the .so file
+    vim /etc/php5/php.ini 
+    
     git clone https://github.com/joseph-montanez/shado.git
     cd shado
     curl -s https://getcomposer.org/installer | php
     php composer.phar install
     
-    pecl install libevent-beta
-    vim /etc/php5/php.ini --add in the .so file
-    
+    # -- Run the application
     php src/main.php
 
 Then go to your browser http://127.0.0.1:8081/
