@@ -3,7 +3,6 @@
         "react/react": "0.2.*",
         "predis/predis-async": "dev-master",
         "twig/twig": "1.*",
-        "react/promise": "1.*",
         "cboden/Ratchet": "0.2.*"
     }
 }
