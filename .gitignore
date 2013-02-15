@@ -1,0 +1,4 @@
+config.override.json
+cache
+vendor
+logs

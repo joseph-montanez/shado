@@ -1,0 +1,48 @@
+	<div data-role="footer" data-id="pfooter" data-position="fixed"> 
+		<h2>	
+			<img src="http://s3.amazonaws.com/shabb.com/logo.png" height="32" alt="Shabb" />
+		</h2>
+	</div> <!-- /footer -->
+</div><!-- /page -->
+<script type="text/javascript">
+if (typeof conn === 'undefined') {
+	var conn;
+	var config;
+	$.getJSON('config.json', function(data) {
+		config = data;
+		conn = new WebSocket('ws://' + config.address + ':' + config.ws_port);
+		conn.onopen = function(e) {};
+		conn.onerror = function(e) {};
+		conn.onclose = function(e) {};
+		conn.onmessage = function(e) {
+			var TASK_ADD = 'task-add';
+			var TASK_DELETE = 'task-delete';
+			var TASK_UPDATE = 'task-update';
+			if (e.data.substr(0, TASK_ADD.length) === TASK_ADD) {
+				var json = e.data.substr(TASK_ADD.length + 1, e.data.length - 1);
+				var data = JSON.parse(json);
+				var list = $('.todos');
+				list.prepend('<li data-todo-id="' + data.id + '"><a href="edit?id=' + data.id + '"></a></li>');
+				list.find('[data-todo-id=' + data.id + '] a').text(data.name);
+				list.listview('refresh');
+			}
+			else if (e.data.substr(0, TASK_DELETE.length) === TASK_DELETE) {
+				var json = e.data.substr(TASK_DELETE.length + 1, e.data.length - 1);
+				var data = JSON.parse(json);
+				var list = $('.todos');
+				$('[data-todo-id=' + data.id + ']').remove();
+				list.listview('refresh');
+			}
+			else if (e.data.substr(0, TASK_UPDATE.length) === TASK_UPDATE) {
+				var json = e.data.substr(TASK_UPDATE.length + 1, e.data.length - 1);
+				var data = JSON.parse(json);
+				var list = $('.todos');
+				$('[data-todo-id=' + data.id + '] a').text(data.name);
+				list.listview('refresh');
+			}
+		};
+	});
+}
+</script>
+</body>
+</html>

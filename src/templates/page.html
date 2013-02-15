@@ -1,0 +1,26 @@
+{% spaceless %}
+{% include 'header.html' %}
+<div data-role="header">
+	<h1>Shado List</h1>
+	<a href="add" class="ui-btn-right" data-theme="b" data-prefetch data-transition="slidedown">Add To Do</a>
+</div><!-- /header -->
+
+<div data-role="content">	
+	<ul class="todos" data-role="listview" data-filter="true">
+		{% for todo in todos %}
+			<li data-todo-id="{{ todo.id | e }}"><a href="edit?id={{ todo.id | e('url') }}">{{ todo.name | e }}</a></li>
+		{% endfor %}
+	</ul>
+</div><!-- /content -->
+<script type="text/javascript">
+$(document).bind('pagecreate', function () {
+	$('.todos li').live('swipeleft', function (evt) {
+		$.ajax({
+			url: './delete?id=' + encodeURIComponent($(this).data('todo-id'))
+		});
+		$(this).remove();
+	});
+});
+</script>
+{% include 'footer.html' %}
+{% endspaceless %}

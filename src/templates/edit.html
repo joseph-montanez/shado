@@ -1,0 +1,30 @@
+{% include 'header.html' %}
+<div data-role="header">
+	<a href="./" data-icon="delete" data-transition="slideup" data-prefetch>Back</a>
+	<h1>Update To Do</h1>
+</div><!-- /header -->
+
+<div data-role="content">	
+<form data-ajax="false" action="edit" method="get">
+	<input type="hidden" name="update" id="id_update" value="1"  />
+	<input type="hidden" name="id" id="id_id" value="{{ todo.id }}"  />
+	<ul data-role="listview">
+		<li data-role="fieldcontain">
+        	<label for="name">What do you want to do?</label>
+        	<input type="text" name="name" id="id_name" value="{{ todo.name }}"  />
+		</li>
+		<li class="ui-body ui-body-b">
+			<button type="submit" data-theme="a" data-icon="check">Submit</button>
+		</li>
+	</ul>
+</form>
+<form data-ajax="false" action="delete" method="get">
+	<input type="hidden" name="id" id="id_id" value="{{ todo.id }}" />
+	<ul data-role="listview">
+		<li class="ui-body ui-body-b">
+			<button type="submit" data-theme="d">Delete</button>
+		</li>
+	</ul>
+</form>
+</div><!-- /content -->
+{% include 'footer.html' %}
