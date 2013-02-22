@@ -3,17 +3,17 @@ include __DIR__ . '/../vendor/autoload.php';
 
 class TodoServConn implements Ratchet\ConnectionInterface {
 
-    /**
-     * Send data to the connection
-     * @param string
-     * @return ConnectionInterface
-     */
-    function send($data) {}
+	/**
+	 * Send data to the connection
+	 * @param string
+	 * @return ConnectionInterface
+	 */
+	function send($data) {}
 
-    /**
-     * Close the connection
-     */
-    function close() {}
+	/**
+	 * Close the connection
+	 */
+	function close() {}
 }
 
 class TodoMessage implements Ratchet\MessageComponentInterface {
@@ -25,15 +25,9 @@ class TodoMessage implements Ratchet\MessageComponentInterface {
 	
 	public function onOpen(Ratchet\ConnectionInterface $conn) {
 		$this->clients->attach($conn);
-		
-		//echo "New Connections! ({$conn->resourceId})\n";
-	
 	}
 	public function onMessage(Ratchet\ConnectionInterface $from, $msg) {
 		$numRecv = count($this->clients) - 1;
-		//echo sprintf('Connection %d sending message "%s" to %d other connection%s' . "\n"
-		//	, $from->resourceId, $msg, $numRecv, $numRecv == 1 ? '' : 's');
-		//echo count($this->clients), PHP_EOL;
 		foreach ($this->clients as $client) {
 			if ($from !== $client) {
 				// The sender is not the receiver, send to each client connected
@@ -42,15 +36,10 @@ class TodoMessage implements Ratchet\MessageComponentInterface {
 		}
 	}
 	public function onClose(Ratchet\ConnectionInterface $conn) {
-        // The connection is closed, remove it, as we can no longer send it messages
-        $this->clients->detach($conn);
-
-        //echo "Connection {$conn->resourceId} has disconnected\n";
+		$this->clients->detach($conn);
 	}
 	public function onError(Ratchet\ConnectionInterface $conn, Exception $e) {
-        //echo "An error has occurred: {$e->getMessage()}\n";
-
-        $conn->close();
+		$conn->close();
 	}
 }
 
@@ -73,16 +62,34 @@ $templates['edit.html'] = $twig->loadTemplate('edit.html');
 //-- Routes
 $routes = array();
 
-$routes['/'] = function ($request, $response) use (&$templates, &$redis) {
-	$redis->lrange('todos', 0, -1, function($todo_ids, $client) use (&$templates, &$request, &$response, &$redis) {
+$routes['/'] = function ($request, $response) use (&$templates, &$redis, &$config) {
+	$redis->lrange('todos', 0, -1, function($todo_ids, $client) use (&$templates, &$request, &$response, &$redis, &$config) {
 		$multi = $redis->multiExec();
 		foreach ($todo_ids as $id) {
 			$multi->hgetall('todos_' . $id);
 		}
-		$multi->execute(function ($todos, $client) use (&$templates, &$response) {
+		$multi->execute(function ($todos, $client) use (&$templates, &$response, &$config) {
 			$headers = array('Content-Type' => 'text/html; charset=UTF-8');
+			$headers['Access-Control-Allow-Origin'] = 'http://' . $config['address'] . ':' . $config['ws_port'];
+			$headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS';
 			$response->writeHead(200, $headers);
 			$response->end($templates['page.html']->render(array('todos' => $todos)));
+		});
+	});
+};
+
+$routes['/list'] = function ($request, $response) use (&$templates, &$redis, &$config) {
+	$redis->lrange('todos', 0, -1, function($todo_ids, $client) use (&$templates, &$request, &$response, &$redis, &$config) {
+		$multi = $redis->multiExec();
+		foreach ($todo_ids as $id) {
+			$multi->hgetall('todos_' . $id);
+		}
+		$multi->execute(function ($todos, $client) use (&$templates, &$response, &$config) {
+			$headers = array('Content-Type' => 'text/html; charset=UTF-8');
+			$headers['Access-Control-Allow-Origin'] = 'http://' . $config['address'] . ':' . $config['ws_port'];
+			$headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS';
+			$response->writeHead(200, $headers);
+			$response->end(json_encode(array('todos' => $todos)));
 		});
 	});
 };
@@ -176,12 +183,73 @@ $routes['/config.json'] = function ($request, $response) use (&$templates, &$red
 	$response->end(json_encode($config));
 };
 
+$routes['/static/...'] = function ($request, $response, $params) use (&$templates, &$redis, &$config) {
+	$content_type = 'text/plain';
+	$data = '';
+	if (stristr($params[1], '.js') !== false) {
+		$content_type = 'text/javascript';
+	}
+	else if (stristr($params[1], '.html') !== false) {
+		$content_type = 'text/html';
+	}
+	else if (stristr($params[1], '.css') !== false) {
+		$content_type = 'text/css';
+	}
+	else if (stristr($params[1], '.gif') !== false) {
+		$content_type = 'image/gif';
+	}
+	else if (stristr($params[1], '.png') !== false) {
+		$content_type = 'image/png';
+	}
+	else if (substr($params[1], -1) === '/' || $params[1] === '') {
+		$content_type = 'text/html';
+		$list = scandir(__DIR__ . '/static/' . $params[1]);
+		foreach ($list as $i => $file) {
+			if (is_dir(__DIR__ . '/static/' . $params[1] . '/' . $file)) {
+				$file .= '/';
+			}
+			$data .= "<a href='$file'>$file</a><br/>";
+		}
+	}
+
+	if ($data === '') {
+		$data = file_get_contents(__DIR__ . '/static/' . $params[1]);
+	}
+
+	$headers = array('Content-Type' => $content_type);
+	$response->writeHead(200, $headers);
+	$response->end($data);
+};
+
 //-- Server
 $app = function ($request, $response) use (&$routes, &$redis) {
 	$path = $request->getPath();
-
 	if (isset($routes[$path])) {
 		$routes[$path]($request, $response);
+	}
+	else {
+		foreach ($routes as $pattern => $route) {
+			$is_regex = false; //substr($pattern, 0, 1) === '/' and substr($pattern, -1) === '/';
+			if ((stristr($pattern, ':') !== false or stristr($pattern, '?') !== false or stristr($pattern, '...') !== false) and !$is_regex) {
+				$pattern = str_replace('/', '\/', $pattern);
+				$pattern = str_replace('...', '(.*+)', $pattern);
+				$pattern = str_replace('?', '', $pattern);
+				$pattern = preg_replace('/\:([%A-Za-z0-9\-_\.]+)/', '(?P<${1}>[%A-Za-z0-9\-_\.+]+)', $pattern);
+				$pattern = '/^' . $pattern . '\/?$/';
+				$is_regex = true;
+			}
+			if ($is_regex) {
+				$matched = @preg_match($pattern, $path, $params);
+				if ($matched) {
+					$route($request, $response, $params);
+					break;
+				}
+			}
+		}
+		if (!isset($matched) || (isset($matched) && ($matched === 0 || $matched === false))) {
+			$response->writeHead(404, array());
+			$response->end("");
+		}
 	}
 };
 
