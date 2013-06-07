@@ -1,5 +1,9 @@
 <?php
+ini_set('apc.enable_cli', 1);
+ini_set('apc.stat', 0);
+
 include __DIR__ . '/../vendor/autoload.php';
+include 'client.php';
 
 class TodoServConn implements Ratchet\ConnectionInterface {
 
@@ -62,9 +66,9 @@ $templates['edit.html'] = $twig->loadTemplate('edit.html');
 //-- Routes
 $routes = array();
 
-$routes['/'] = function ($request, $response) use (&$templates, &$redis, &$config) {
-	$redis->lrange('todos', 0, -1, function($todo_ids, $client) use (&$templates, &$request, &$response, &$redis, &$config) {
-		$multi = $redis->multiExec();
+$routes['/'] = function ($request, $response) use (&$templates, &$cache, &$config) {
+	$cache->lrange('todos', 0, -1, function($todo_ids, $client) use (&$templates, &$request, &$response, &$cache, &$config) {
+		$multi = $cache->multiExec();
 		foreach ($todo_ids as $id) {
 			$multi->hgetall('todos_' . $id);
 		}
@@ -78,9 +82,9 @@ $routes['/'] = function ($request, $response) use (&$templates, &$redis, &$confi
 	});
 };
 
-$routes['/list'] = function ($request, $response) use (&$templates, &$redis, &$config) {
-	$redis->lrange('todos', 0, -1, function($todo_ids, $client) use (&$templates, &$request, &$response, &$redis, &$config) {
-		$multi = $redis->multiExec();
+$routes['/list'] = function ($request, $response) use (&$templates, &$cache, &$config) {
+	$cache->lrange('todos', 0, -1, function($todo_ids, $client) use (&$templates, &$request, &$response, &$cache, &$config) {
+		$multi = $cache->multiExec();
 		foreach ($todo_ids as $id) {
 			$multi->hgetall('todos_' . $id);
 		}
@@ -94,14 +98,14 @@ $routes['/list'] = function ($request, $response) use (&$templates, &$redis, &$c
 	});
 };
 
-$routes['/add'] = function ($request, $response) use (&$templates, &$redis, &$todo_message) {
+$routes['/add'] = function ($request, $response) use (&$templates, &$cache, &$todo_message) {
 	$query = $request->getQuery();
 
 	if (!empty($query['name'])) {
 		$id = uniqid();
 
 		//-- Save to redis
-		$multi = $redis->multiExec();
+		$multi = $cache->multiExec();
 		$multi->hmset('todos_' . $id, 'id', $id, 'name', $query['name']);
 		$multi->lpush('todos', $id);
 		$multi->execute(function ($replies, $client) use (&$response, &$todo_message, &$id, &$query) {
@@ -125,12 +129,12 @@ $routes['/add'] = function ($request, $response) use (&$templates, &$redis, &$to
 	$response->end($templates['add.html']->render(array()));
 };
 
-$routes['/edit'] = function ($request, $response) use (&$templates, &$redis, &$todo_message) {
+$routes['/edit'] = function ($request, $response) use (&$templates, &$cache, &$todo_message) {
 	$query = $request->getQuery();
 
 	if (!empty($query['update']) && !empty($query['name']) && !empty($query['id'])) {
 		$id = $query['id'];
-		$redis->hset('todos_' . $id, 'name', $query['name'], function ($replies, $client) use (&$response, &$todo_message, &$id, &$query) {
+		$cache->hset('todos_' . $id, 'name', $query['name'], function ($replies, $client) use (&$response, &$todo_message, &$id, &$query) {
 			//-- Send message to everyone
 			$json_msg = json_encode(
 				array('id' => $id, 'name' => $query['name'])
@@ -147,7 +151,7 @@ $routes['/edit'] = function ($request, $response) use (&$templates, &$redis, &$t
 
 	if (!empty($query['id'])) {
 		$id = $query['id'];
-		$redis->hgetall('todos_' . $id, function($todo, $client) use (&$templates, &$response) {
+		$cache->hgetall('todos_' . $id, function($todo, $client) use (&$templates, &$response) {
 			$headers = array('Content-Type' => 'text/html; charset=UTF-8');
 			$response->writeHead(200, $headers);
 			$response->end($templates['edit.html']->render(array('todo' => $todo)));
@@ -155,12 +159,12 @@ $routes['/edit'] = function ($request, $response) use (&$templates, &$redis, &$t
 	}
 };
 
-$routes['/delete'] = function ($request, $response) use (&$redis, &$todo_message) {
+$routes['/delete'] = function ($request, $response) use (&$cache, &$todo_message) {
 	$query = $request->getQuery();
 
 	if (!empty($query['id'])) {
 		$id = $query['id'];
-		$multi = $redis->multiExec();
+		$multi = $cache->multiExec();
 		$multi->lrem('todos', -1, $id);
 		$multi->del('todos_' . $id);
 		$multi->execute(function ($replies, $client) use (&$response, &$todo_message, &$id) {
@@ -177,13 +181,13 @@ $routes['/delete'] = function ($request, $response) use (&$redis, &$todo_message
 	}
 };
 
-$routes['/config.json'] = function ($request, $response) use (&$templates, &$redis, &$config) {
+$routes['/config.json'] = function ($request, $response) use (&$templates, &$cache, &$config) {
 	$headers = array('Content-Type' => 'text/json');
 	$response->writeHead(200, $headers);
 	$response->end(json_encode($config));
 };
 
-$routes['/static/...'] = function ($request, $response, $params) use (&$templates, &$redis, &$config) {
+$routes['/static/...'] = function ($request, $response, $params) use (&$templates, &$cache, &$config) {
 	$content_type = 'text/plain';
 	$data = '';
 	if (stristr($params[1], '.js') !== false) {
@@ -222,7 +226,7 @@ $routes['/static/...'] = function ($request, $response, $params) use (&$template
 };
 
 //-- Server
-$app = function ($request, $response) use (&$routes, &$redis) {
+$app = function ($request, $response) use (&$routes, &$cache) {
 	$path = $request->getPath();
 	if (isset($routes[$path])) {
 		$routes[$path]($request, $response);
@@ -262,7 +266,13 @@ $websocket_socket = new React\Socket\Server($loop);
 $websocket = new Ratchet\Server\IoServer($todo_ws, $websocket_socket, $loop);
 $http = new React\Http\Server($http_socket);
 $http->on('request', $app);
-$redis = new Predis\Async\Client('tcp://127.0.0.1:6379', $loop);
+
+
+if (!class_exists('Predis\Async\Client')) {
+	$cache = new Shabb\Apc\Client('file.data', $loop);
+} else {
+	$cache = new Predis\Async\Client('tcp://127.0.0.1:6379', $loop);
+}
 
 $http_socket->listen($config['http_port'], $config['address']);
 $websocket_socket->listen($config['ws_port'], $config['address']);
