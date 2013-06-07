@@ -7,6 +7,7 @@ Install & Run
 =====
     # -- Optional but makes the application scale better
     pecl install libevent-beta
+    # -- Window users: http://windows.php.net/downloads/pecl/releases/libevent/
     # -- Add in the .so file
     vim /etc/php5/php.ini
     
