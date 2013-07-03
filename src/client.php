@@ -79,6 +79,51 @@ class Client {
 		$fn($list, null);
 	}
 
+	public function lrem($key, $count, $value, $fn) {
+		$list = array();
+		if (apc_exists($key)) {
+			$list = apc_fetch($key);
+		}
+		$list_keys = array_keys($list);
+		//-- count > 0: Remove elements equal to value moving from head to tail.
+		if ($count < 0) {
+			//-- Do nothing the counted removals are in the foreach loop
+		}
+		//-- count < 0: Remove elements equal to value moving from tail to head.
+		else if ($count > 0) {
+			$list_keys = array_reverse($list_keys);
+		}
+
+		$abs_count = abs($count);
+		$removed = 0;
+		foreach ($list_keys as $list_key) {
+			if ($list[$list_key] == $value) {
+				unset($list[$list_key]);
+				$removed++;
+			}
+			//-- count = 0: Remove all elements equal to value.
+			if ($abs_count != 0 && $abs_count <= $removed) {
+				break;
+			}
+		}
+		
+		apc_store($key, $list);
+
+		$fn($list, null);
+	}
+
+	//-- TODO: allow multi-key deletion, either first key is array or more params
+	public function del($key, $fn) {
+		$removed = 0;
+		if (apc_exists($key)) {
+			if (apc_delete($key)) {
+				$removed++;
+			}
+		}
+
+		$fn($removed, null);
+	}
+
 	public function multiExec() {
 		return new Multi($this);
 	}
@@ -102,6 +147,14 @@ class Multi {
 
 	public function lpush($key, $value) {
 		$this->cmds []= array(array($this->client, 'lpush'), array($key, $value));
+	}
+
+	public function lrem($key, $count, $value) {
+		$this->cmds []= array(array($this->client, 'lrem'), array($key, $count, $value));
+	}
+
+	public function del($key) {
+		$this->cmds []= array(array($this->client, 'del'), array($key));
 	}
 
 	public function execute($fn) {
